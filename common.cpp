@@ -42,7 +42,6 @@
 #include <pcl/surface/on_nurbs/triangulation.h>
 
 using namespace std;
-#define POINTLITMIT 5;
 
 void vectorToUReuler(pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloudNormal)
 {
@@ -127,10 +126,93 @@ void vectorToUReuler(pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloudNormal)
 		double ry = my * (Rot(0, 2) - Rot(2, 0)) * theta;
 		double rz = my * (Rot(1, 0) - Rot(0, 1)) * theta;
 		cout << "UR rad :" << rx << " " << ry << " " << rz << " RPY :" << rpy.x() << " " << rpy.y() << " " << rpy.z() << endl;
-
 	}
 }
+void vectorToUReuler(pcl::PointXYZ point)
+{
+	Eigen::Vector3d dirvec;
+	Eigen::Vector3d rpy;
+	double roll, pitch = 0, yaw = 0;
+	{
+		dirvec(0) = point.x;
+		dirvec(1) = point.y;
+		dirvec(2) = point.z;
+		dirvec = dirvec.normalized();
+		roll = acos(dirvec.z());
+		if (dirvec.x() == 0 && dirvec.y() == 0)
+		{
+			yaw = 0;
+		}
+		else
+		{
+			Eigen::Vector3d noZ = Eigen::Vector3d{ dirvec.x(), dirvec.y(), 0.0 };
+			noZ = noZ.normalized();
+			if (dirvec.x() <= 0)
+				yaw = -acos(-noZ.y());
+			else
+				yaw = acos(-noZ.y());
+		}
+		if (pitch < -M_PI)
+			pitch = 2 * M_PI + pitch;
+		else if (pitch > M_PI)
+			pitch = pitch - 2 * M_PI;
+		////////////////////////////
+		rpy = { roll, pitch, yaw };
+		if (roll == 0 && pitch == 0 && yaw == 0)
+			rpy = { 0.0, 0.0, 0.0 };
+		Eigen::Matrix3d RollM = Eigen::Matrix3d::Identity();
+		Eigen::Matrix3d YawM = Eigen::Matrix3d::Identity();
+		Eigen::Matrix3d PitchM = Eigen::Matrix3d::Identity();
+		Eigen::Matrix3d Rot = Eigen::Matrix3d::Identity();
+		Eigen::Matrix3d PRM = Eigen::Matrix3d::Identity();
+		RollM(0, 0) = 1.0;
+		RollM(0, 1) = 0.0;
+		RollM(0, 2) = 0.0;
+		RollM(1, 0) = 0.0;
+		RollM(1, 1) = cos(roll);
+		RollM(1, 2) = -sin(roll);
+		RollM(2, 0) = 0.0;
+		RollM(2, 1) = sin(roll);
+		RollM(2, 2) = cos(roll);
 
+		PitchM(0, 0) = cos(pitch);
+		PitchM(0, 1) = 0.0;
+		PitchM(0, 2) = sin(pitch);
+		PitchM(1, 0) = 0.0;
+		PitchM(1, 1) = 1.0;
+		PitchM(1, 2) = 0.0;
+		PitchM(2, 0) = -sin(pitch);
+		PitchM(2, 1) = 0.0;
+		PitchM(2, 2) = cos(pitch);
+
+		YawM(0, 0) = cos(yaw);
+		YawM(0, 1) = -sin(yaw);;
+		YawM(0, 2) = 0.0;
+		YawM(1, 0) = sin(yaw);
+		YawM(1, 1) = cos(yaw);
+		YawM(1, 2) = 0.0;
+		YawM(2, 0) = 0.0;
+		YawM(2, 1) = 0.0;
+		YawM(2, 2) = 1.0;
+
+		Rot = YawM * PitchM * RollM;
+
+		double rotSum = Rot(0, 0) + Rot(1, 1) + Rot(2, 2) - 1;
+		double alpha = acos(rotSum / 2);
+		double theta = 0.0;
+		if (roll >= 0)
+			theta = alpha;
+		else
+			theta = 2.0 * M_PI - alpha;
+		double my = 1.0 / (2.0 * sin(theta));
+
+		double rx = my * (Rot(2, 1) - Rot(1, 2)) * theta;
+		double ry = my * (Rot(0, 2) - Rot(2, 0)) * theta;
+		double rz = my * (Rot(1, 0) - Rot(0, 1)) * theta;
+		cout << "UR rad :" << rx << " " << ry << " " << rz << endl;
+		//cout << " RPY :" << rpy.x() << " " << rpy.y() << " " << rpy.z() << endl;
+	}
+}
 void STLToPCD()
 {
 	vtkSmartPointer<vtkSTLReader> reader = vtkSmartPointer<vtkSTLReader>::New();
@@ -196,10 +278,8 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr EdgeDetection(pcl::PointCloud<pcl::PointXYZ>
 			everagedistance += sqrt(squaredistance[1]);
 			//   cout<<everagedistance<<endl;
 	}
-
 	everagedistance = everagedistance/(cloud->size()/2);
 	cout<<"everage distance is : "<<everagedistance<<endl;
-
 */
 	pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> normEst;  //其中pcl::PointXYZ表示输入类型数据，pcl::Normal表示输出类型,且pcl::Normal前三项是法向，最后一项是曲率
 	normEst.setInputCloud(SourceCloud);
@@ -534,6 +614,7 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr ArrangeRouteXY_Deg(pcl::PointCloud<pcl::Poin
 			}
 		}
 	}
+
 	return cloud_After;
 }
 
@@ -646,14 +727,15 @@ int main(int argc, char** argv)
 #pragma endregion
 
 #pragma region Calculate corner point
-	//reader.read("C:\\Users\\JasonYJSu\\Desktop\\PCD\\Formal\\curve_downsample_leaf3n.pcd", *cloud);
-	//reader.read("C:\\Users\\JasonYJSu\\Desktop\\PCD\\Formal\\Edge_Normal.pcd", *cloudNormal);
-	//reader.read("C:\\Users\\JasonYJSu\\Desktop\\PCD\\Formal\\EdgeXY.pcd", *cloud_Edge);
+	//reader.read("D:\\JasonWork\\PCD\\Formal\\curve_downsample_leaf3n.pcd", *cloud);
+	//reader.read("D:\\JasonWork\\PCD\\Formal\\Edge_Normal.pcd", *cloudNormal);
+	//reader.read("D:\\JasonWork\\PCD\\Formal\\EdgeXY.pcd", *cloud_Edge);
 
 	//cloud = AxisRotate(cloud, 90);
 
 	//double xVec, yVec, distY, distX, theta, maxY = 0.0, maxX = 0.0;
-	//int YmaxIndex = 0, XmaxIndex = 0;
+	//double degminY = 5.0, degminX = 5.0;
+	//int YmaxIndex = 0, XmaxIndex = 0, YminIndex = 0, XminIndex = 0;
 	//pcl::PointXYZ minPt, maxPt;
 	//pcl::getMinMax3D(*cloud_Edge, minPt, maxPt);
 
@@ -706,15 +788,37 @@ int main(int argc, char** argv)
 	//			edge->points.push_back(cloud_Edge->points[i]);
 	//		}
 	//	}
+
+	//	if (cloud_Edge->points[i].y > 0)
+	//	{
+
+	//		if (abs(cloud_Edge->points[i].x) < degminX)
+	//		{
+	//			degminX = abs(cloud_Edge->points[i].x);
+	//			XminIndex = i;
+	//		}
+	//	}
+	//	if (cloud_Edge->points[i].y < 0)
+	//	{
+
+	//		if (abs(cloud_Edge->points[i].x) < degminY)
+	//		{
+	//			degminY = abs(cloud_Edge->points[i].x);
+	//			YminIndex = i;
+	//		}
+	//	}
+	//
 	//}
-	//tmpcloudNormalA->points.push_back(cloudNormal->points[YmaxIndex]);
-	//tmpcloudNormalA->points.push_back(cloudNormal->points[XmaxIndex]);
+	//tmpcloudNormal->points.push_back(cloudNormal->points[YmaxIndex]);
+	//tmpcloudNormal->points.push_back(cloudNormal->points[XmaxIndex]);
+	//tmpcloudNormal->points.push_back(cloudNormal->points[YminIndex]);
+	//tmpcloudNormal->points.push_back(cloudNormal->points[XminIndex]);
 #pragma endregion
 
 #pragma region Create Normal vector and match with Edge points
 
-	reader.read("C:\\Users\\JasonYJSu\\Desktop\\PCD\\Formal\\curve_downsample_leaf3n.pcd", *cloud);
-	reader.read("C:\\Users\\JasonYJSu\\Desktop\\PCD\\Formal\\Edge.pcd", *cloud_Edge);
+	reader.read("D:\\JasonWork\\PCD\\Formal\\curve_downsample_leaf3n.pcd", *cloud);
+	reader.read("D:\\JasonWork\\PCD\\Formal\\Edge.pcd", *cloud_Edge);
 	cloud = AxisRotate(cloud, 90);
 	cloud_Edge = AxisRotate(cloud_Edge, 90);
 	cloud_Edge = PolarSortingXY(cloud_Edge);
@@ -722,27 +826,56 @@ int main(int argc, char** argv)
 
 	tmpcloudNormal = FindNormal(cloud, 100);
 
-	cloud_Edge = ArrangeRouteXY_Ratio(cloud_Edge, 49);
-	//double xGate, yGate;
+	cloud_Edge = ArrangeRouteXY_Ratio(cloud_Edge, 20);
 
-	//for (size_t i = 0; i < cloud_Edge->points.size(); i++)
-	//{
-	//	for (size_t j = 0; j < tmpcloudNormal->points.size(); j++)
-	//	{
-	//		xGate = cloud_Edge->points[i].x - tmpcloudNormal->points[j].x;
-	//		yGate = cloud_Edge->points[i].y - tmpcloudNormal->points[j].y;
-	//		if (abs(xGate) < 0.5 && abs(yGate) < 0.5)
-	//		{
-	//			cloudNormal->points.push_back(tmpcloudNormal->points[j]);
-	//			if (cloudNormal->points[i].normal_z > 0)
-	//			{
-	//				cloudNormal->points[i].normal_z *= -1.0;
-	//			}
-	//			break;
-	//		}
-	//	}
-	//}
+	pcl::PointXYZ point;
 
+	double xGate, yGate;
+
+	for (size_t i = 0; i < cloud_Edge->points.size(); i++)
+	{
+		for (size_t j = 0; j < tmpcloudNormal->points.size(); j++)
+		{
+			xGate = cloud_Edge->points[i].x - tmpcloudNormal->points[j].x;
+			yGate = cloud_Edge->points[i].y - tmpcloudNormal->points[j].y;
+			if (abs(xGate) < 0.5 && abs(yGate) < 0.5)
+			{
+				cloudNormal->points.push_back(tmpcloudNormal->points[j]);
+				if (cloudNormal->points[i].normal_z > 0)
+				{
+					cloudNormal->points[i].normal_z *= -1.0;
+				}
+				break;
+			}
+		}
+	}
+
+	for (size_t i = 0; i < cloud->points.size(); i++)
+	{
+		cloud->points[i].x += -140.5;
+		cloud->points[i].y += -582.61;
+		cloud->points[i].z += 80.7;
+	}
+	for (size_t i = 0; i < cloudNormal->points.size(); i++)
+	{
+		cloudNormal->points[i].x += -140.5;
+		cloudNormal->points[i].y += -582.61;
+		cloudNormal->points[i].z += 80.7;
+
+
+
+		cloud_Edge->points[i].x += -140.5;
+		cloud_Edge->points[i].y += -582.61;
+		cloud_Edge->points[i].z += 80.7;
+
+		cout << "X : " << cloudNormal->points[i].x << endl;
+		cout << "Y : " << cloudNormal->points[i].y << endl;
+		cout << "Z : " << cloudNormal->points[i].z << endl;
+		point.x = cloudNormal->points[i].normal_x;
+		point.y = cloudNormal->points[i].normal_y;
+		point.z = cloudNormal->points[i].normal_z;
+		vectorToUReuler(point);
+	}
 	//tmpcloudNormal->height = 1;
 	//tmpcloudNormal->width = tmpcloudNormal->points.size();
 	//pcl::io::savePCDFileASCII("C:\\Users\\JasonYJSu\\Desktop\\PCD\\Formal\\Edge_Normal.pcd", *cloudNormal);
@@ -982,9 +1115,9 @@ int main(int argc, char** argv)
 
 	//viewer->setBackgroundColor(0, 0, 0);
 
-	//viewer->addPointCloudNormals<pcl::PointXYZINormal>(cloudNormal, 1, -50, "cloudNormal");
-	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 1.0, 1.0, "cloudNormal");
-	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "cloudNormal");
+	viewer->addPointCloudNormals<pcl::PointXYZINormal>(cloudNormal, 1, -50, "cloudNormal");
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 1.0, 1.0, "cloudNormal");
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "cloudNormal");
 
 	//viewer->addPointCloudNormals<pcl::PointXYZINormal>(tmpcloudNormal, 1, -50, "cloudNormal");
 	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "cloudNormal");
@@ -1039,4 +1172,3 @@ int main(int argc, char** argv)
 
 	return (0);
 }
-
