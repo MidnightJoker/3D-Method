@@ -494,6 +494,72 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr PolarSortingXY(pcl::PointCloud<pcl::PointXYZ
 	return cloud_After;
 }
 
+pcl::PointCloud<pcl::PointXYZ>::Ptr ArrangeRouteXY_Deg(pcl::PointCloud<pcl::PointXYZ>::Ptr SourceCloud, double DegreeGap)
+{
+	pcl::PointXYZ point;
+	Eigen::Vector4d centroid;
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_After(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_Process(new pcl::PointCloud<pcl::PointXYZ>);
+
+	pcl::copyPointCloud(*SourceCloud, *cloud_Process);
+	for (size_t i = 0; i < cloud_Process->points.size(); i++)
+	{
+		cloud_Process->points[i].z = 0;
+	}
+
+	pcl::compute3DCentroid(*cloud_Process, centroid);
+	point.x = centroid[0];
+	point.y = centroid[1];
+	point.z = centroid[2];
+
+	double theta, x, y;
+
+	for (size_t deg = 0; deg < 360; deg += DegreeGap)
+	{
+		for (size_t i = 0; i < cloud_Process->points.size(); i++)
+		{
+			x = (double)cloud_Process->points[i].x - centroid[0];
+			y = (double)cloud_Process->points[i].y - centroid[1];
+			theta = atan2(y, x) * 180 / M_PI;
+
+			if (theta < 0)
+			{
+				theta += 360;
+			}
+
+			if (abs(deg - theta) < 0.5)
+			{
+				cloud_After->points.push_back(SourceCloud->points[i]);
+				break;
+			}
+		}
+	}
+	return cloud_After;
+}
+
+pcl::PointCloud<pcl::PointXYZ>::Ptr ArrangeRouteXY_Ratio(pcl::PointCloud<pcl::PointXYZ>::Ptr SourceCloud, double TotalPoint)
+{
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_After(new pcl::PointCloud<pcl::PointXYZ>);
+
+	int gap = SourceCloud->points.size() / TotalPoint;
+	if (gap <= 1)
+	{
+		cloud_After = SourceCloud;
+	}
+	else
+	{
+		for (size_t i = 0; i < SourceCloud->points.size(); i += gap)
+		{
+			cloud_After->points.push_back(SourceCloud->points[i]);
+			if (cloud_After->points.size() >= TotalPoint + 1)
+			{
+				break;
+			}
+		}
+	}
+	return cloud_After;
+}
+
 double rounding(float num, int index)
 {
 	//https://dotblogs.com.tw/forloop/2016/07/31/rounding
@@ -523,12 +589,14 @@ double rounding(float num, int index)
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Cloud Viewer"));
 int main(int argc, char** argv)
 {
+#pragma region Variable
 	srand((unsigned int)time(NULL));
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_corner(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_down(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_After(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_Edge(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_Centroid(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_down_rotate(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_down_rotate_sort(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_down_rotate_sort_Y0(new pcl::PointCloud<pcl::PointXYZ>);
@@ -544,6 +612,7 @@ int main(int argc, char** argv)
 	pcl::PointCloud<pcl::PointXYZINormal>::Ptr tmpcloudNormalA(new pcl::PointCloud<pcl::PointXYZINormal>);
 
 	pcl::PCDReader reader;
+#pragma endregion
 
 #pragma region Cube pose rotate
 	////-------------------Cube Test-------------------//
@@ -575,7 +644,6 @@ int main(int argc, char** argv)
 	//pcl::io::loadPCDFile<pcl::PointXYZINormal>("D:\\Program\\[3]_PCL\\PCD_Data\\cube_normal.pcd", *cloudNormal);
 	//vectorToUReuler(cloudNormal);
 #pragma endregion
-
 
 #pragma region Calculate corner point
 	//reader.read("C:\\Users\\JasonYJSu\\Desktop\\PCD\\Formal\\curve_downsample_leaf3n.pcd", *cloud);
@@ -654,25 +722,26 @@ int main(int argc, char** argv)
 
 	tmpcloudNormal = FindNormal(cloud, 100);
 
-	double xGate, yGate;
+	cloud_Edge = ArrangeRouteXY_Ratio(cloud_Edge, 49);
+	//double xGate, yGate;
 
-	for (size_t i = 0; i < cloud_Edge->points.size(); i++)
-	{
-		for (size_t j = 0; j < tmpcloudNormal->points.size(); j++)
-		{
-			xGate = cloud_Edge->points[i].x - tmpcloudNormal->points[j].x;
-			yGate = cloud_Edge->points[i].y - tmpcloudNormal->points[j].y;
-			if (abs(xGate) < 0.5 && abs(yGate) < 0.5)
-			{
-				cloudNormal->points.push_back(tmpcloudNormal->points[j]);
-				if (cloudNormal->points[i].normal_z > 0)
-				{
-					cloudNormal->points[i].normal_z *= -1.0;
-				}
-				break;
-			}
-		}
-	}
+	//for (size_t i = 0; i < cloud_Edge->points.size(); i++)
+	//{
+	//	for (size_t j = 0; j < tmpcloudNormal->points.size(); j++)
+	//	{
+	//		xGate = cloud_Edge->points[i].x - tmpcloudNormal->points[j].x;
+	//		yGate = cloud_Edge->points[i].y - tmpcloudNormal->points[j].y;
+	//		if (abs(xGate) < 0.5 && abs(yGate) < 0.5)
+	//		{
+	//			cloudNormal->points.push_back(tmpcloudNormal->points[j]);
+	//			if (cloudNormal->points[i].normal_z > 0)
+	//			{
+	//				cloudNormal->points[i].normal_z *= -1.0;
+	//			}
+	//			break;
+	//		}
+	//	}
+	//}
 
 	//tmpcloudNormal->height = 1;
 	//tmpcloudNormal->width = tmpcloudNormal->points.size();
@@ -917,16 +986,20 @@ int main(int argc, char** argv)
 	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 1.0, 1.0, "cloudNormal");
 	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "cloudNormal");
 
-	viewer->addPointCloudNormals<pcl::PointXYZINormal>(tmpcloudNormal, 1, -50, "cloudNormal");
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "cloudNormal");
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "cloudNormal");
+	//viewer->addPointCloudNormals<pcl::PointXYZINormal>(tmpcloudNormal, 1, -50, "cloudNormal");
+	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "cloudNormal");
+	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "cloudNormal");
 
 	//viewer->addPointCloudNormals<pcl::PointXYZINormal>(tmpcloudNormalA, 1, -50, "tmpcloudNormalA");
 	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0, "tmpcloudNormalA");
 	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "tmpcloudNormalA");
 
+	//viewer->addPointCloud(cloud_Centroid, "cloud_Centroid");
+	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 1.0, 1.0, "cloud_Centroid");;
+	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "cloud_Centroid");
+
 	viewer->addPointCloud(cloud, "cloud");
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.8, 0.8, 0.8, "cloud");
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.5, 0.5, 0.5, "cloud");
 	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "cloud");
 
 	//viewer->addPointCloud(cloud_After, "cloud_After");
@@ -937,8 +1010,8 @@ int main(int argc, char** argv)
 	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "cloud_corner");
 	//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 9, "cloud_corner");
 
-	viewer->addPointCloud(edge, "edge");
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0, "edge");
+	viewer->addPointCloud(cloud_Edge, "edge");
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "edge");
 	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "edge");
 
 	////pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = reg.getColoredCloud();
