@@ -1,4 +1,4 @@
-﻿#include <cmath>
+#include <cmath>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -8,6 +8,7 @@
 #include <pcl/common/transforms.h>   
 
 #include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 #include <pcl/io/vtk_lib_io.h>
 
 #include <pcl/point_cloud.h>
@@ -286,10 +287,16 @@ Eigen::Vector3d vectorToURRPY(pcl::PointXYZ point)
 
 	return rpy;
 }
-void STLToPCD()
+void STLToPCD(std::string& SrcFile, std::string& SaveFile)
 {
 	vtkSmartPointer<vtkSTLReader> reader = vtkSmartPointer<vtkSTLReader>::New();
-	reader->SetFileName("data...\\data.stl");
+
+	char* src = new char[SrcFile.length() + 1];
+	strcpy(src, SrcFile.c_str());
+	char* sve = new char[SaveFile.length() + 1];
+	strcpy(sve, SaveFile.c_str());
+
+	reader->SetFileName(src);
 	reader->Update();
 	vtkSmartPointer<vtkPolyData> polydata = vtkSmartPointer<vtkPolyData>::New();
 	polydata = reader->GetOutput();
@@ -299,6 +306,23 @@ void STLToPCD()
 	//从ply转pcd
 	pcl::io::vtkPolyDataToPointCloud(polydata, *cloud);
 	pcl::io::savePCDFileASCII("data...\\data.pcd", *cloud);
+	delete[] src;
+	delete[] sve;
+}
+void PLYToPCD(std::string& SrcFile, std::string& SaveFile)
+{
+	char* src = new char[SrcFile.length() + 1];
+	strcpy(src, SrcFile.c_str());
+	char* sve = new char[SaveFile.length() + 1];
+	strcpy(sve, SaveFile.c_str());
+
+	pcl::PCLPointCloud2 point_cloud;
+	pcl::PLYReader PLYreader;
+	PLYreader.read(src, point_cloud);
+	pcl::PointCloud<pcl::PointXYZ> cloud;
+	pcl::fromPCLPointCloud2(point_cloud, cloud);
+	pcl::PCDWriter writer;
+	writer.writeASCII(sve, cloud);
 }
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr Downsampling(pcl::PointCloud<pcl::PointXYZ>::Ptr SourceCloud, float LeafSize = 5.0)
@@ -312,7 +336,7 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr Downsampling(pcl::PointCloud<pcl::PointXYZ>:
 	return cloud_filtered;
 }
 
-pcl::PointCloud<pcl::PointXYZINormal>::Ptr FindNormal(pcl::PointCloud<pcl::PointXYZ>::Ptr SourceCloud, int Radius = 7, int thread = 2, Eigen::Vector4f centroid = {0,0,0})
+pcl::PointCloud<pcl::PointXYZINormal>::Ptr FindNormal(pcl::PointCloud<pcl::PointXYZ>::Ptr SourceCloud, int Radius = 7, int thread = 2, Eigen::Vector4f centroid = { 0,0,0 })
 {
 	pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloudNormal(new pcl::PointCloud<pcl::PointXYZINormal>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr filtered(new pcl::PointCloud< pcl::PointXYZ>);
@@ -965,92 +989,92 @@ int main(int argc, char** argv)
 
 ////0521
 //reader.read("D:\\JasonWork\\PCD\\block_leaf0508Edge.pcd", *cloud);
-reader.read("D:\\JasonWork\\PCD\\block_leaf0508.pcd", *cloud);
-pcl::PointXYZ minPt, maxPt;
-pcl::PointXYZ normal;
-Eigen::Vector3d rpy, rotateVec;
-float ymin, ymax, y, xmin, xmax, x, zmin, zmax;
-float xGate, yGate;
-Eigen::Vector4f centroid;
-cloud = AxisRotate(cloud, 90, "Z");
-//cloud = RadiusDenoise(cloud, 0.5, 50);
-//////////////////回歸原點
-//pcl::getMinMax3D(*cloud, minPt, maxPt);
-//for (size_t i = 0; i < cloud->size(); i++)
-//{
-//	cloud->points[i].x -= minPt.x;
-//	cloud->points[i].y -= minPt.y;
-//	cloud->points[i].z -= minPt.z;
-//}
-//cloud = Downsampling(cloud, 0.8);
-pcl::copyPointCloud(*cloud, *cloud_After);
-cloud = EdgeDetection(cloud, 50);
+	reader.read("D:\\JasonWork\\PCD\\block_leaf0508.pcd", *cloud);
+	pcl::PointXYZ minPt, maxPt;
+	pcl::PointXYZ normal;
+	Eigen::Vector3d rpy, rotateVec;
+	float ymin, ymax, y, xmin, xmax, x, zmin, zmax;
+	float xGate, yGate;
+	Eigen::Vector4f centroid;
+	cloud = AxisRotate(cloud, 90, "Z");
+	//cloud = RadiusDenoise(cloud, 0.5, 50);
+	//////////////////回歸原點
+	//pcl::getMinMax3D(*cloud, minPt, maxPt);
+	//for (size_t i = 0; i < cloud->size(); i++)
+	//{
+	//	cloud->points[i].x -= minPt.x;
+	//	cloud->points[i].y -= minPt.y;
+	//	cloud->points[i].z -= minPt.z;
+	//}
+	//cloud = Downsampling(cloud, 0.8);
+	pcl::copyPointCloud(*cloud, *cloud_After);
+	cloud = EdgeDetection(cloud, 50);
 
-pcl::copyPointCloud(*cloud, *cloud_Z0);
-for (size_t i = 0; i < cloud_Z0->size(); i++)
-{
-	cloud_Z0->points[i].z = 0;
-}
-pcl::getMinMax3D(*cloud, minPt, maxPt);
-xmax = maxPt.x;
-xmin = minPt.x;
-ymax = maxPt.y;
-ymin = minPt.y;
-
-
-for (size_t i = 0; i < cloud->size(); i++)
-{
-	x = cloud->points[i].x;
-	y = cloud->points[i].y;
-	if (x < xmax + 4.0 & x > xmax - 4.0)
+	pcl::copyPointCloud(*cloud, *cloud_Z0);
+	for (size_t i = 0; i < cloud_Z0->size(); i++)
 	{
-		tmp->points.push_back(cloud->points[i]);
-		continue;
+		cloud_Z0->points[i].z = 0;
 	}
-	if (x < xmin + 4.0 & x > xmin - 4.0)
-	{
-		tmp->points.push_back(cloud->points[i]);
-		continue;
-	}
-	if (y < ymax + 2.0 & y > ymax - 2.0)
-	{
-		tmp->points.push_back(cloud->points[i]);
-		continue;
-	}
-	if (y < ymin + 2.0 & y > ymin - 2.0)
-	{
-		tmp->points.push_back(cloud->points[i]);
-		continue;
-	}
-}
-pcl::compute3DCentroid(*cloud_Z0, centroid);
-centroid(2) -= 100;
-////
-tmp = ArrangeRouteXY_Ratio(tmp, 50);
-tmp = PolarSortingXY(tmp);
-tmpcloudNormal = FindNormal(cloud, 80.0, 5, centroid);
+	pcl::getMinMax3D(*cloud, minPt, maxPt);
+	xmax = maxPt.x;
+	xmin = minPt.x;
+	ymax = maxPt.y;
+	ymin = minPt.y;
 
 
-//
-//
-//
-for (size_t j = 0; j < tmp->points.size(); j++)
-{
-	for (size_t i = 0; i < tmpcloudNormal->points.size(); i++)
+	for (size_t i = 0; i < cloud->size(); i++)
 	{
-		xGate = abs(tmpcloudNormal->points[i].x - tmp->points[j].x);
-		yGate = abs(tmpcloudNormal->points[i].y - tmp->points[j].y);
-		if (xGate < 1 & yGate < 1)
+		x = cloud->points[i].x;
+		y = cloud->points[i].y;
+		if (x < xmax + 4.0 & x > xmax - 4.0)
 		{
-			tmpcloudNormalA->points.push_back(tmpcloudNormal->points[i]);
-			//tmpcloudNormalA->points[j].normal_x = 0;
-			break;
+			tmp->points.push_back(cloud->points[i]);
+			continue;
+		}
+		if (x < xmin + 4.0 & x > xmin - 4.0)
+		{
+			tmp->points.push_back(cloud->points[i]);
+			continue;
+		}
+		if (y < ymax + 2.0 & y > ymax - 2.0)
+		{
+			tmp->points.push_back(cloud->points[i]);
+			continue;
+		}
+		if (y < ymin + 2.0 & y > ymin - 2.0)
+		{
+			tmp->points.push_back(cloud->points[i]);
+			continue;
 		}
 	}
-}
-//
-FILE* outfp;
-outfp = fopen("flower.txt", "w");
+	pcl::compute3DCentroid(*cloud_Z0, centroid);
+	centroid(2) -= 100;
+	////
+	tmp = ArrangeRouteXY_Ratio(tmp, 50);
+	tmp = PolarSortingXY(tmp);
+	tmpcloudNormal = FindNormal(cloud, 80.0, 5, centroid);
+
+
+	//
+	//
+	//
+	for (size_t j = 0; j < tmp->points.size(); j++)
+	{
+		for (size_t i = 0; i < tmpcloudNormal->points.size(); i++)
+		{
+			xGate = abs(tmpcloudNormal->points[i].x - tmp->points[j].x);
+			yGate = abs(tmpcloudNormal->points[i].y - tmp->points[j].y);
+			if (xGate < 1 & yGate < 1)
+			{
+				tmpcloudNormalA->points.push_back(tmpcloudNormal->points[i]);
+				//tmpcloudNormalA->points[j].normal_x = 0;
+				break;
+			}
+		}
+	}
+	//
+	FILE* outfp;
+	outfp = fopen("flower.txt", "w");
 
 
 
@@ -1067,11 +1091,11 @@ outfp = fopen("flower.txt", "w");
 
 		rotateVec = vectorToUReuler(normal);
 		fprintf(outfp, "%.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n",
-			tmpcloudNormalA->points[i].x, tmpcloudNormalA->points[i].y, tmpcloudNormalA->points[i].z, 
+			tmpcloudNormalA->points[i].x, tmpcloudNormalA->points[i].y, tmpcloudNormalA->points[i].z,
 			rotateVec(0), rotateVec(1), rotateVec(2));
 	}
 
-fclose(outfp);
+	fclose(outfp);
 
 	//tmpcloudNormal->height = 1;
 	//tmpcloudNormal->width = tmpcloudNormal->points.size();
