@@ -305,7 +305,7 @@ void STLToPCD(std::string& SrcFile, std::string& SaveFile)
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
 	//从ply转pcd
 	pcl::io::vtkPolyDataToPointCloud(polydata, *cloud);
-	pcl::io::savePCDFileASCII("data...\\data.pcd", *cloud);
+	pcl::io::savePCDFileASCII(sve, *cloud);
 	delete[] src;
 	delete[] sve;
 }
@@ -323,6 +323,8 @@ void PLYToPCD(std::string& SrcFile, std::string& SaveFile)
 	pcl::fromPCLPointCloud2(point_cloud, cloud);
 	pcl::PCDWriter writer;
 	writer.writeASCII(sve, cloud);
+	delete[] src;
+	delete[] sve;
 }
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr Downsampling(pcl::PointCloud<pcl::PointXYZ>::Ptr SourceCloud, float LeafSize = 5.0)
